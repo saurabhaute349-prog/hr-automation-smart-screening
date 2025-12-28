@@ -1,0 +1,988 @@
+{
+  "name": "HR Automation System - Fixed v2.0",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-attachment",
+              "leftValue": "=attachment_0",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0ce2a4fa-8367-4231-917c-5a11246ccb29",
+      "name": "Has Attachment?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -304,
+        2576
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "id": "c8f2e545-b6c7-4b98-8e1f-2bd912c14c43",
+      "name": "Extract CV Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [
+        -176,
+        2352
+      ],
+      "typeVersion": 1,
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-extraction",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "69e31057-0acb-4cd7-8b8d-91ead5a645e7",
+      "name": "Extraction Success?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        112,
+        2352
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= \nEmail Body: {{ $('Extract CV Text').item.json.text }}\nDetermine if this is a job application email.",
+        "options": {
+          "systemMessage": "You are an email classifier. Analyze the email and determine if it's a job application.\n\nA job application email typically:\n- Contains a CV/resume attachment\n- Mentions applying for a position\n- Includes phrases like \"I am applying\", \"interested in the role\", \"my resume\"\n- May reference a job posting or position title\n\nRespond with ONLY the word 'yes' if this is a job application, or 'no' if it is not.\nDo not include any explanation, punctuation, or additional text."
+        }
+      },
+      "id": "03022d69-6150-489e-881e-95d651a074fa",
+      "name": "Classify Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        352,
+        2336
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ff5cefe4-a901-4a35-b9f1-f0f6c812bdd3",
+      "name": "Gemini Classifier",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "position": [
+        400,
+        2736
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "googlePalmApi": "YOUR_GEMINI_API"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-job-app",
+              "leftValue": "={{ $json.output.trim().toLowerCase() }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9ceb475e-7f8f-485d-b0c4-1e9c940c7a16",
+      "name": "Is Job Application?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        688,
+        2352
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Candidate CV Text:\n{{ $('Extract CV Text').item.json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an AI resume screening assistant with access to job openings data.\n\n**Your Task:**\n1. Extract candidate information from the CV\n2. Identify the role they are applying for (look for clear indicators like \"applying for\", job title mentions, or infer from their experience)\n3. Use the Open_Positions tool to find matching jobs and check if positions are open\n4. Score the candidate 1-5 based on job requirements (5=excellent fit)\n5. Shortlist if: score >= 4 AND position is open\n\n**Scoring Guidelines:**\n- 5: Exceeds all requirements, excellent experience\n- 4: Meets all requirements, good fit\n- 3: Meets most requirements, acceptable\n- 2: Meets some requirements, gaps exist\n- 1: Does not meet requirements\n\n**Output Format (valid JSON only):**\n{\n  \"candidate_name\": \"Full Name\",\n  \"email\": \"email@example.com\",\n  \"phone_number\": \"123-456-7890\",\n  \"role_applied_for\": \"Job Title\",\n  \"position_open\": \"yes\" or \"no\",\n  \"candidate_score\": 1-5,\n  \"shortlisted\": \"yes\" or \"no\"\n}\n\nBe thorough in checking the Open_Positions tool for exact or similar role matches."
+        }
+      },
+      "id": "919aab95-f3b5-42b2-b4c0-ed524e612d3f",
+      "name": "Screen Candidate",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        864,
+        2416
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a5836acb-6d7a-44eb-8ce2-47fdc4297e0c",
+      "name": "Gemini Screener",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "position": [
+        752,
+        2688
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "googlePalmApi": "YOUR_GEMINI_API"
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"candidate_name\": \"Jane Doe\",\n  \"email\": \"jane.doe@email.com\",\n  \"phone_number\": \"555-123-4567\",\n  \"role_applied_for\": \"AI Workflow Developer\",\n  \"position_open\": \"yes\",\n  \"candidate_score\": 5,\n  \"shortlisted\": \"yes\"\n}"
+      },
+      "id": "a526bf1a-387c-4738-ad01-660b26474253",
+      "name": "Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "position": [
+        1152,
+        2688
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1I75KYKIFEDdJ3faaXq8Dmf3O9yKMjFvoQV2Z0TltBGs",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "030e1b7a-fccf-458d-829c-6c71359a9d56",
+      "name": "Open Positions Tool",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "position": [
+        912,
+        2752
+      ],
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_SHEETS_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "validate-fields",
+              "leftValue": "={{ $json.output.shortlisted }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "af1c9b8c-1092-4a90-8d90-152c346bba70",
+      "name": "Valid Output?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1200,
+        2416
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4",
+          "mode": "list",
+          "cachedResultName": "save data of candidates",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.output.candidate_name }}",
+            "role applied": "={{ $json.output.role_applied_for }}",
+            "email": "={{ $json.output.email }}",
+            "phone ": "={{ $json.output.phone_number }}",
+            "score ": "={{ $json.output.candidate_score }}",
+            "position": "={{ $json.output.position_open }}",
+            "short listed": "={{ $json.output.shortlisted }}"
+          },
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone ",
+              "displayName": "phone ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "role applied",
+              "displayName": "role applied",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score ",
+              "displayName": "score ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "position",
+              "displayName": "position",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "short listed",
+              "displayName": "short listed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d348c4b4-da6b-4c90-9235-c8bf1e3f7737",
+      "name": "Save All Candidates",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1392,
+        2432
+      ],
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_SHEETS_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-shortlisted",
+              "leftValue": "={{ $json['short listed'] }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "726480ac-3adb-4c9e-82bf-3c125eeda61c",
+      "name": "Is Shortlisted?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1552,
+        2496
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Candidate Information:\n{{ $('Extract CV Text').item.json.text }}\n\nRole Applied:{{ $json['role applied'] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an expert HR interviewer. Generate 3 relevant interview questions.\n\n**Instructions:**\n1. Use the Open_Positions tool to get job requirements for the role\n2. Analyze the candidate's CV text provided\n3. Generate 3 specific questions that:\n   - Test key skills from job requirements\n   - Explore relevant experience mentioned in CV\n   - Identify red flags (employment gaps, frequent job changes)\n   - Assess cultural fit\n\n**Question Types to Include:**\n- Technical/Skills-based question\n- Experience/Behavioral question  \n- Situational/Problem-solving question\n\n**Output Format (valid JSON only):**\n{\n  \"question_1\": \"Your first question here\",\n  \"question_2\": \"Your second question here\",\n  \"question_3\": \"Your third question here\"\n}\n\nMake questions specific to THIS candidate and role."
+        }
+      },
+      "id": "544c88c1-5457-4147-ad0b-e3956058fd8e",
+      "name": "Generate Interview Questions",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1744,
+        2400
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a7347237-125a-4470-885d-e9bffe4c9247",
+      "name": "Gemini Questions",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "position": [
+        1744,
+        2592
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "googlePalmApi": "YOUR_GEMINI_API"
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"question_1\": \"Question 1 text\",\n  \"question_2\": \"Question 2 text\",\n  \"question_3\": \"Question 3 text\"\n}"
+      },
+      "id": "6429b36f-7b95-4b15-9cc9-1ac0114150a4",
+      "name": "Questions Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "position": [
+        1952,
+        2592
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4",
+          "mode": "list",
+          "cachedResultName": "save data of candidates",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FONOesnp9Nl8Iy5OsxDpGai4nIEzkukEGupebHOCuC4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "QUESTIONS ": "={{ $json.output }}"
+          },
+          "matchingColumns": [
+            "QUESTIONS "
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone ",
+              "displayName": "phone ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role applied",
+              "displayName": "role applied",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score ",
+              "displayName": "score ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "position",
+              "displayName": "position",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "short listed",
+              "displayName": "short listed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "QUESTIONS ",
+              "displayName": "QUESTIONS ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b9b5d4a0-7dbf-4d4a-8d9e-362f3c436198",
+      "name": "Save Shortlisted with Questions",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        2048,
+        2400
+      ],
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_SHEETS_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Loop Over Items1').item.json.from }}",
+        "subject": "=Application Received -{{ $('Is Shortlisted?').item.json['short listed'] }}",
+        "message": "=<html>\n<body>\n<p>Dear,{{ $('Is Shortlisted?').item.json.Name }}</p>\n\n<p>Thank you for applying for the <strong>{{ $('Is Shortlisted?').item.json['role applied'] }}</strong> position.</p>\n\n{{ $json.output.shortlisted === 'yes' ? '<p style=\"color: green;\">Good news! We have shortlisted your application and will contact you soon to schedule an interview.</p>' : '<p>We have received your application and will review it carefully. We will contact you if your profile matches our requirements.</p>' }}\n\n<p>Best regards,<br>\nHR Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "d7b60d17-705b-4eeb-a9a9-28188c6ee76e",
+      "name": "Send Acknowledgment Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        2208,
+        2096
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "b8f9d044-ab19-4b8e-97fa-0f0fb676bc22",
+      "credentials": {
+        "gmailOAuth2": "YOUR_GMAIL_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Application Update - {{ $json.Name }} ",
+        "message": "=<html>\n<body>\n<p>Dear {{ $json.Name }},</p>\n\n<p>Thank you for your interest in the <strong>{{ $json['role applied'] }}</strong> position.</p>\n\n<p>After careful review, we regret to inform you that we will not be moving forward with your application at this time. This decision was difficult as we received many qualified applications.</p>\n\n<p>We encourage you to apply for future openings that match your skills and experience.</p>\n\n<p>Best wishes in your job search,<br>\nHR Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "123be713-a800-444e-9e03-a9e0e9760cfa",
+      "name": "Send Rejection Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1712,
+        2752
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "4ac7682e-ae5a-4337-8d12-a21e1ea48fa0",
+      "credentials": {
+        "gmailOAuth2": "YOUR_GMAIL_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8fd96b17-7e51-44ca-bcc2-cde76706c9f9",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        48,
+        2736
+      ],
+      "typeVersion": 1,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "### Success Path\n\nShortlisted candidates:\n\u2713 Get interview questions\n\u2713 Saved to separate sheet\n\u2713 Receive positive email\n\nNot shortlisted:\n\u2713 Saved to main sheet\n\u2713 Receive polite rejection",
+        "height": 240,
+        "width": 300
+      },
+      "id": "cc8a77d0-741d-4daa-bf03-758320aa85fc",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1952,
+        2800
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "id": "90dae045-52ef-490f-9e64-f70f08c8ebf8",
+      "name": "Gmail Trigger1",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "position": [
+        -768,
+        2432
+      ],
+      "typeVersion": 1.3,
+      "credentials": {
+        "gmailOAuth2": "YOUR_GMAIL_OAUTH_CREDENTIAL"
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "1a073752-46ab-467c-8547-51a35319a254",
+      "name": "Loop Over Items1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        -512,
+        2432
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "content": "### Error Paths\n\nErrors are logged for:\n- Missing attachments\n- Failed PDF extraction\n- Invalid AI outputs\n- Sheet update failures",
+        "height": 180,
+        "width": 280
+      },
+      "id": "53f4ed31-57f6-4022-8cc2-719af5105efb",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        144,
+        2800
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=NAME- {{ $('Save All Candidates').item.json.Name }}\n\n ROLE- {{ $('Save All Candidates').item.json['role applied'] }}\n\nEMAIL- {{ $('Save All Candidates').item.json.email }}\n\n MOBILE NO -{{ $('Save All Candidates').item.json['phone '] }}\n\nINTERVIEW QUESTION -{{ $json['QUESTIONS '].question_1 }}\n\n\n QUESTIONS- {{ $json['QUESTIONS '].question_2 }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2368,
+        2464
+      ],
+      "id": "a6008eca-8592-4492-9f75-471cc74a8859",
+      "name": "Send a text message",
+      "webhookId": "4f9ff6eb-192a-41e4-82ea-fb34f9b6a84e",
+      "credentials": {
+        "telegramApi": "YOUR_TELEGRAM_TOKEN"
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Has Attachment?": {
+      "main": [
+        [
+          {
+            "node": "Extract CV Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CV Text": {
+      "main": [
+        [
+          {
+            "node": "Extraction Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraction Success?": {
+      "main": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Is Job Application?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Classifier": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Job Application?": {
+      "main": [
+        [
+          {
+            "node": "Screen Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Screen Candidate": {
+      "main": [
+        [
+          {
+            "node": "Valid Output?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Screener": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Screen Candidate",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Screen Candidate",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open Positions Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Screen Candidate",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Generate Interview Questions",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Output?": {
+      "main": [
+        [
+          {
+            "node": "Save All Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save All Candidates": {
+      "main": [
+        [
+          {
+            "node": "Is Shortlisted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Shortlisted?": {
+      "main": [
+        [
+          {
+            "node": "Generate Interview Questions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Rejection Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Interview Questions": {
+      "main": [
+        [
+          {
+            "node": "Save Shortlisted with Questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Questions": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Interview Questions",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Questions Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Interview Questions",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Shortlisted with Questions": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Has Attachment?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Attachment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a72534dc-0664-4fe4-99ea-9783712eaebf",
+  "meta": {
+    "templateId": "9528",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3856be5c2ad0540455682778667f684adac48490525c717aa69641b77ee321a3"
+  },
+  "id": "UX0ZXMJZgWfDvbcX",
+  "tags": []
+}
